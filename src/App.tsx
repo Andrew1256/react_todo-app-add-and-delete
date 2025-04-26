@@ -1,26 +1,210 @@
-/* eslint-disable max-len */
-/* eslint-disable jsx-a11y/control-has-associated-label */
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { UserWarning } from './UserWarning';
-
-const USER_ID = 0;
+import {
+  deleteTodos,
+  getTodos,
+  patchTodos,
+  postTodos,
+  USER_ID,
+} from './api/todos';
+import { Todo } from './types/Todo';
+import { Footer } from './components/Footer';
+import { Selected } from './types/Selected';
+import { Header } from './components/Header';
+import { TodoList } from './components/TodoList';
 
 export const App: React.FC = () => {
+  const [allTodos, setAllTodos] = useState<Todo[]>([]);
+  const [errors, setErrors] = useState('');
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [updatingText, setUpdatingText] = useState('');
+  const [loadingTodo, setLoadingTodo] = useState(true);
+  const [editTodo, setEditTodo] = useState('');
+  const [selected, setSelected] = useState<Selected>('all');
+
+  useEffect(() => {
+    const loadTodos = async () => {
+      try {
+        const todos = await getTodos();
+
+        setErrors('');
+        setAllTodos(todos);
+      } catch {
+        setErrors('Unable to load todos');
+      } finally {
+        setLoadingTodo(false);
+      }
+    };
+
+    loadTodos();
+  }, []);
+
+  useEffect(() => {
+    if (!errors) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setErrors('');
+    }, 3000);
+
+    return () => clearTimeout(timeout);
+  }, [errors]);
+
   if (!USER_ID) {
     return <UserWarning />;
   }
 
-  return (
-    <section className="section container">
-      <p className="title is-4">
-        Copy all you need from the prev task:
-        <br />
-        <a href="https://github.com/mate-academy/react_todo-app-loading-todos#react-todo-app-load-todos">
-          React Todo App - Load Todos
-        </a>
-      </p>
+  const filteredTodos = allTodos.filter(todo => {
+    if (selected === 'active') {
+      return !todo.completed;
+    }
 
-      <p className="subtitle">Styles are already copied</p>
-    </section>
+    if (selected === 'completed') {
+      return todo.completed;
+    }
+
+    return true;
+  });
+
+  const completedTodos = allTodos.filter(todo => todo.completed).length;
+
+  const handleEdit = (id: number, title: string) => {
+    setUpdatingId(id);
+    setUpdatingText(title);
+  };
+
+  const handleAdd = async () => {
+    if (!editTodo.trim()) {
+      return;
+    }
+
+    try {
+      const newTodo = await postTodos({
+        title: editTodo.trim(),
+        completed: false,
+      });
+
+      setAllTodos(current => [...current, newTodo]);
+      setEditTodo('');
+    } catch {
+      setErrors('Unable to add todo');
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await deleteTodos(id);
+      setAllTodos(current => current.filter(todo => todo.id !== id));
+    } catch {
+      setErrors('Unable to delete todo');
+    }
+  };
+
+  const handleSave = async (id: number) => {
+    if (!updatingText.trim()) {
+      return;
+    }
+
+    try {
+      const updatedTodo = await patchTodos(id, { title: updatingText.trim() });
+
+      setAllTodos(current => current.map(t => (t.id === id ? updatedTodo : t)));
+    } catch {
+      setErrors('Unable to update todo');
+    } finally {
+      setUpdatingId(null);
+      setUpdatingText('');
+    }
+  };
+
+  const toggleCompleted = async (id: number, currentStatus: boolean) => {
+    try {
+      const updatedTodo = await patchTodos(id, { completed: !currentStatus });
+
+      setAllTodos(current => current.map(t => (t.id === id ? updatedTodo : t)));
+    } catch {
+      setErrors('Unable to update todo');
+    }
+  };
+
+  const clearAllCompleted = async () => {
+    // eslint-disable-next-line @typescript-eslint/no-shadow
+    const completedTodos = allTodos.filter(todo => todo.completed);
+
+    try {
+      await Promise.all(completedTodos.map(todo => deleteTodos(todo.id)));
+
+      setAllTodos(current => current.filter(todo => !todo.completed));
+    } catch {
+      setErrors('Unable to delete completed todos');
+    }
+  };
+
+  const updateAllToCompleted = async () => {
+    const shouldCompleteAll = !allTodos.every(todo => todo.completed);
+
+    try {
+      const updatedTodos = await Promise.all(
+        allTodos.map(todo =>
+          patchTodos(todo.id, { completed: shouldCompleteAll }),
+        ),
+      );
+
+      setAllTodos(updatedTodos);
+    } catch {
+      setErrors('Unable to update all todos');
+    }
+  };
+
+  return (
+    <div className="todoapp">
+      <h1 className="todoapp__title">todos</h1>
+
+      <div className="todoapp__content">
+        <Header
+          allTodos={allTodos}
+          updateAll={updateAllToCompleted}
+          handleAdd={handleAdd}
+          editTodo={editTodo}
+          setEditTodo={setEditTodo}
+        />
+
+        <TodoList
+          loadingTodo={loadingTodo}
+          filteredTodos={filteredTodos}
+          toggleCompleted={toggleCompleted}
+          updatingId={updatingId}
+          handleSave={handleSave}
+          updatingText={updatingText}
+          setUpdatingText={setUpdatingText}
+          handleEdit={handleEdit}
+          handleDelete={handleDelete}
+        />
+
+        {allTodos.length > 0 && (
+          <Footer
+            allTodos={allTodos}
+            selected={selected}
+            setSelected={setSelected}
+            clearAll={clearAllCompleted}
+            completedTodos={completedTodos}
+          />
+        )}
+      </div>
+
+      <div
+        data-cy="ErrorNotification"
+        className={`notification is-danger is-light has-text-weight-normal ${errors ? '' : 'hidden'}`}
+      >
+        <button
+          data-cy="HideErrorButton"
+          type="button"
+          className="delete"
+          onClick={() => setErrors('')}
+        ></button>
+        {errors}
+      </div>
+    </div>
   );
 };
