@@ -1,5 +1,5 @@
-import React from 'react';
 import { Todo } from '../types/Todo';
+import classNames from 'classnames';
 
 interface Props {
   todo: Todo;
@@ -10,6 +10,8 @@ interface Props {
   setUpdatingText: (a: string) => void;
   handleEdit: (a: number, b: string) => void;
   handleDelete: (a: number) => void;
+  temp: Todo | null;
+  isDeleting: boolean;
 }
 
 export const TodoItem: React.FC<Props> = ({
@@ -21,13 +23,15 @@ export const TodoItem: React.FC<Props> = ({
   setUpdatingText,
   handleEdit,
   handleDelete,
+  temp,
+  isDeleting,
 }) => {
+  const todoItemClass = classNames('todo', {
+    completed: todo.completed,
+  });
+
   return (
-    <div
-      key={todo.id}
-      data-cy="Todo"
-      className={`todo ${todo.completed ? 'completed' : ''}`}
-    >
+    <div key={todo.id} data-cy="Todo" className={todoItemClass}>
       {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
       <label
         className="todo__status-label"
@@ -80,7 +84,12 @@ export const TodoItem: React.FC<Props> = ({
         </>
       )}
 
-      <div data-cy="TodoLoader" className="modal overlay">
+      <div
+        data-cy="TodoLoader"
+        className={classNames('modal overlay', {
+          'is-active': temp?.id === todo.id || isDeleting,
+        })}
+      >
         <div className="modal-background has-background-white-ter" />
         <div className="loader" />
       </div>

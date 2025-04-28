@@ -1,31 +1,35 @@
-import React from 'react';
-import { Todo } from '../types/Todo';
+import { useEffect } from 'react';
 
 interface Props {
-  allTodos: Todo[];
-  updateAll: () => Promise<void>;
-  handleAdd: () => Promise<void>;
+  updateAll: () => void;
+  handleAdd: () => void;
   editTodo: string;
-  setEditTodo: (editTodo: string) => void;
+  setEditTodo: (a: string) => void;
+  disabledInput: boolean;
+  inputRef: React.RefObject<HTMLInputElement>;
 }
 
 export const Header: React.FC<Props> = ({
-  allTodos,
   updateAll,
   handleAdd,
   editTodo,
   setEditTodo,
+  disabledInput,
+  inputRef,
 }) => {
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
   return (
     <header className="todoapp__header">
-      {allTodos.length !== 0 && (
-        <button
-          onClick={() => updateAll()}
-          type="button"
-          className={`todoapp__toggle-all ${allTodos.every(todo => todo.completed) ? 'active' : ''}`}
-          data-cy="ToggleAllButton"
-        />
-      )}
+      <button
+        type="button"
+        className="todoapp__toggle-all"
+        data-cy="ToggleAllButton"
+        onClick={updateAll}
+      ></button>
+
       <form
         onSubmit={e => {
           e.preventDefault();
@@ -33,11 +37,12 @@ export const Header: React.FC<Props> = ({
         }}
       >
         <input
+          ref={inputRef}
           value={editTodo}
+          disabled={disabledInput}
           onChange={e => setEditTodo(e.target.value)}
           data-cy="NewTodoField"
           type="text"
-          autoFocus={true}
           className="todoapp__new-todo"
           placeholder="What needs to be done?"
         />

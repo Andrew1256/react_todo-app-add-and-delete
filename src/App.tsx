@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import classNames from 'classnames';
 import { UserWarning } from './UserWarning';
 import {
   deleteTodos,
@@ -20,15 +21,24 @@ export const App: React.FC = () => {
   const [updatingText, setUpdatingText] = useState('');
   const [loadingTodo, setLoadingTodo] = useState(true);
   const [editTodo, setEditTodo] = useState('');
-  const [selected, setSelected] = useState<Selected>('all');
+  const [selected, setSelected] = useState<Selected>(Selected.All);
+  const [disabledInput, setDisabledInput] = useState<boolean>(false);
+  const [temp, setTemp] = useState<Todo | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const loadTodos = async () => {
       try {
         const todos = await getTodos();
 
-        setErrors('');
-        setAllTodos(todos);
+        if (!todos || todos.length === 0) {
+          setErrors('Unable to load todos');
+          setAllTodos([]);
+        } else {
+          setAllTodos(todos);
+          setErrors('');
+        }
       } catch {
         setErrors('Unable to load todos');
       } finally {
@@ -44,9 +54,7 @@ export const App: React.FC = () => {
       return;
     }
 
-    const timeout = setTimeout(() => {
-      setErrors('');
-    }, 3000);
+    const timeout = setTimeout(() => setErrors(''), 3000);
 
     return () => clearTimeout(timeout);
   }, [errors]);
@@ -56,11 +64,11 @@ export const App: React.FC = () => {
   }
 
   const filteredTodos = allTodos.filter(todo => {
-    if (selected === 'active') {
+    if (selected === Selected.Active) {
       return !todo.completed;
     }
 
-    if (selected === 'completed') {
+    if (selected === Selected.Completed) {
       return todo.completed;
     }
 
@@ -75,9 +83,21 @@ export const App: React.FC = () => {
   };
 
   const handleAdd = async () => {
-    if (!editTodo.trim()) {
+    if (editTodo.trim() === '') {
+      setErrors('Title should not be empty');
+
       return;
     }
+
+    const tempTodo: Todo = {
+      id: Math.random(),
+      title: editTodo.trim(),
+      completed: false,
+      userId: USER_ID!,
+    };
+
+    setTemp(tempTodo);
+    setDisabledInput(true);
 
     try {
       const newTodo = await postTodos({
@@ -85,19 +105,32 @@ export const App: React.FC = () => {
         completed: false,
       });
 
+      setEditTodo('');
       setAllTodos(current => [...current, newTodo]);
       setEditTodo('');
     } catch {
-      setErrors('Unable to add todo');
+      setErrors('Unable to add a todo');
+    } finally {
+      setTemp(null);
+      setDisabledInput(false);
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
     }
   };
 
   const handleDelete = async (id: number) => {
+    setDeletingId(id);
     try {
       await deleteTodos(id);
       setAllTodos(current => current.filter(todo => todo.id !== id));
     } catch {
-      setErrors('Unable to delete todo');
+      setErrors('Unable to delete a todo');
+    } finally {
+      setDeletingId(null);
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
     }
   };
 
@@ -129,16 +162,25 @@ export const App: React.FC = () => {
   };
 
   const clearAllCompleted = async () => {
-    // eslint-disable-next-line @typescript-eslint/no-shadow
-    const completedTodos = allTodos.filter(todo => todo.completed);
+    const completedTodosList = allTodos.filter(todo => todo.completed);
 
-    try {
-      await Promise.all(completedTodos.map(todo => deleteTodos(todo.id)));
+    const successfulDeletions: number[] = [];
 
-      setAllTodos(current => current.filter(todo => !todo.completed));
-    } catch {
-      setErrors('Unable to delete completed todos');
-    }
+    await Promise.all(
+      completedTodosList.map(async todo => {
+        try {
+          await deleteTodos(todo.id);
+          successfulDeletions.push(todo.id);
+        } catch {
+          setErrors('Unable to delete a todo');
+        }
+      }),
+    );
+
+    setAllTodos(current =>
+      current.filter(todo => !successfulDeletions.includes(todo.id)),
+    );
+    inputRef.current?.focus();
   };
 
   const updateAllToCompleted = async () => {
@@ -157,17 +199,26 @@ export const App: React.FC = () => {
     }
   };
 
+  const errorNotificationClass = classNames(
+    'notification',
+    'is-danger',
+    'is-light',
+    'has-text-weight-normal',
+    { hidden: !errors },
+  );
+
   return (
     <div className="todoapp">
       <h1 className="todoapp__title">todos</h1>
 
       <div className="todoapp__content">
         <Header
-          allTodos={allTodos}
           updateAll={updateAllToCompleted}
           handleAdd={handleAdd}
           editTodo={editTodo}
           setEditTodo={setEditTodo}
+          disabledInput={disabledInput}
+          inputRef={inputRef}
         />
 
         <TodoList
@@ -178,8 +229,10 @@ export const App: React.FC = () => {
           handleSave={handleSave}
           updatingText={updatingText}
           setUpdatingText={setUpdatingText}
+          temp={temp}
           handleEdit={handleEdit}
           handleDelete={handleDelete}
+          deletingId={deletingId}
         />
 
         {allTodos.length > 0 && (
@@ -193,10 +246,7 @@ export const App: React.FC = () => {
         )}
       </div>
 
-      <div
-        data-cy="ErrorNotification"
-        className={`notification is-danger is-light has-text-weight-normal ${errors ? '' : 'hidden'}`}
-      >
+      <div data-cy="ErrorNotification" className={errorNotificationClass}>
         <button
           data-cy="HideErrorButton"
           type="button"

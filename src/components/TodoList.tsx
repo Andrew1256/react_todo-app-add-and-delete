@@ -1,4 +1,3 @@
-import React from 'react';
 import { Todo } from '../types/Todo';
 import { TodoItem } from './TodoItem';
 
@@ -12,10 +11,11 @@ interface Props {
   setUpdatingText: (a: string) => void;
   handleEdit: (a: number, b: string) => void;
   handleDelete: (a: number) => void;
+  temp: Todo | null;
+  deletingId: number | null;
 }
 
 export const TodoList: React.FC<Props> = ({
-  loadingTodo,
   filteredTodos,
   toggleCompleted,
   updatingId,
@@ -24,23 +24,28 @@ export const TodoList: React.FC<Props> = ({
   setUpdatingText,
   handleEdit,
   handleDelete,
+  temp,
+  deletingId,
 }) => {
+  const todosToShow = temp ? [...filteredTodos, temp] : filteredTodos;
+
   return (
     <section className="todoapp__main" data-cy="TodoList">
-      {!loadingTodo &&
-        filteredTodos.map(todo => (
-          <TodoItem
-            key={todo.id}
-            todo={todo}
-            toggleCompleted={toggleCompleted}
-            updatingId={updatingId}
-            handleSave={handleSave}
-            updatingText={updatingText}
-            setUpdatingText={setUpdatingText}
-            handleEdit={handleEdit}
-            handleDelete={handleDelete}
-          />
-        ))}
+      {todosToShow.map(todo => (
+        <TodoItem
+          key={todo.id}
+          todo={todo}
+          toggleCompleted={toggleCompleted}
+          updatingId={updatingId}
+          handleSave={handleSave}
+          updatingText={updatingText}
+          setUpdatingText={setUpdatingText}
+          handleEdit={handleEdit}
+          handleDelete={handleDelete}
+          temp={temp}
+          isDeleting={deletingId === todo.id}
+        />
+      ))}
     </section>
   );
 };
